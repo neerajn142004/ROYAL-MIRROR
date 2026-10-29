@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Royal Mirror</title>
+  <link rel="icon" type="image/png" href="royal.png">
+  
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    body, html { 
+      margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; 
+      background: #000; font-family: 'Georgia', serif; 
+    }
+
+    /* --- SCREEN MANAGEMENT --- */
+    .active-screen { display: flex !important; z-index: 50; }
+    .hidden-screen { display: none !important; }
+
+    /* --- RAJASTHANI THEME --- */
+    .rajasthani-screen {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: #5c0a0a; 
+      background-image: radial-gradient(#8b0000 15%, transparent 16%), radial-gradient(#8b0000 15%, transparent 16%);
+      background-size: 60px 60px; background-position: 0 0, 30px 30px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+
+    .rajasthani-panel {
+      background: rgba(0, 0, 0, 0.85); border: 8px solid #d4af37; 
+      border-radius: 20px; padding: 40px; text-align: center;
+      box-shadow: 0 0 30px rgba(212, 175, 55, 0.4);
+      max-height: 90vh; 
+      overflow-y: auto; 
+      box-sizing: border-box;
+      width: 90%;
+      max-width: 600px;
+    }
+    
+    .rajasthani-panel::-webkit-scrollbar { display: none; }
+
+    .rajasthani-title {
+      color: #d4af37; font-size: 48px; margin-bottom: 40px;
+      text-transform: uppercase; letter-spacing: 4px; text-shadow: 2px 2px 4px #000;
+    }
+
+    .raj-btn {
+      display: block; width: 100%; background: linear-gradient(45deg, #d4af37, #b8860b);
+      color: #333; font-size: 20px; font-weight: bold;
+      padding: 15px; margin: 15px 0; border: 2px solid #fff; border-radius: 8px;
+      cursor: pointer; text-transform: uppercase; transition: 0.3s;
+    }
+    .raj-btn:hover { transform: scale(1.05); background: linear-gradient(45deg, #b8860b, #d4af37); color: white; }
+    .raj-btn-back { background: #333; color: #d4af37; border-color: #d4af37; }
+    .settings-group { margin-bottom: 25px; padding: 20px; border: 1px dashed #d4af37; border-radius: 10px; }
+    .settings-group h3 { color: white; margin-top: 0; margin-bottom: 15px; }
+
+    /* --- GALLERY MANAGER STYLES --- */
+    #gallery_grid { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 20px; }
+    .gallery-item { 
+      position: relative; width: 120px; height: 120px; border: 4px solid #555; 
+      border-radius: 10px; overflow: hidden; cursor: pointer; transition: 0.3s; background: white; 
+    }
+    .gallery-item.active-item { border-color: #00ff00; box-shadow: 0 0 20px rgba(0, 255, 0, 0.6); }
+    .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+    .btn-delete-item { 
+      position: absolute; top: 5px; right: 5px; background: #ff3d00; color: white; 
+      border: 2px solid white; border-radius: 50%; width: 30px; height: 30px; 
+      font-weight: bold; cursor: pointer; font-size: 14px; z-index: 10;
+    }
+    .btn-delete-item:hover { transform: scale(1.1); }
+    
+    /* NEW: Clickable Category Badge */
+    .cat-badge { 
+      position: absolute; bottom: 0; left: 0; width: 100%; 
+      background: rgba(0,0,0,0.85); color: #ffea00; 
+      font-size: 13px; font-weight: bold; padding: 6px 0; 
+      text-align: center; cursor: pointer; transition: 0.3s;
+      z-index: 10;
+    }
+    .cat-badge:hover { background: #d4af37; color: #000; }
+
+    /* --- ERASER CHECKERED BACKGROUND --- */
+    .checkered-bg {
+      background-color: #333;
+      background-image: 
+        linear-gradient(45deg, #555 25%, transparent 25%, transparent 75%, #555 75%, #555),
+        linear-gradient(45deg, #555 25%, transparent 25%, transparent 75%, #555 75%, #555);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+    }
+    .tool-btn { margin:0; padding: 10px 20px; font-size: 16px; border: 2px solid #fff; border-radius: 8px; font-weight:bold; cursor: pointer; }
+    .tool-btn.active { background: #00c800; color: white; border-color: #00ff00; }
+    .tool-btn.inactive { background: #555; color: #ccc; border-color: #888; }
+
+    /* --- CAMERA LAYOUT --- */
+    #app_wrapper {
+      display: none; position: absolute; top: 50%; left: 50%;
+      background: #222; overflow: hidden; box-sizing: border-box;
+      border: 20px solid #d4af37;
+      border-image: repeating-linear-gradient(45deg, #d4af37, #d4af37 10px, #b8860b 10px, #b8860b 20px) 20;
+    }
+
+    .mode-landscape { width: 100vh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); }
+    .mode-portrait { width: 100vw; height: 100vh; transform: translate(-50%, -50%); }
+
+    #video_element { position: absolute; opacity: 0.01; width: 10px; height: 10px; pointer-events: none; z-index: -1; }
+    #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+
+    /* UI Elements */
+    .top-bar { position: absolute; top: 20px; left: 20px; z-index: 15; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 8px; border: 2px solid #d4af37; }
+    #camera_selector { background: transparent; color: white; border: none; font-size: 18px; outline: none; cursor: pointer; font-weight: bold; width: 250px; }
+    #camera_selector option { background: #333; color: white; }
+    .btn-exit-app { background: #ff3d00; color: white; border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-left: 10px; }
+
+    /* Split Screen */
+    #split_line { display: none; position: absolute; top: 0; left: 50%; width: 4px; height: 100%; background: #d4af37; z-index: 5; }
+    .split-touch-target { display: none; position: absolute; top: 0; width: 50%; height: 100%; box-sizing: border-box; z-index: 6; cursor: pointer; pointer-events: auto; background: transparent; border: none; }
+    #left_highlight { left: 0; } #right_highlight { right: 0; }
+    .compare-active .split-touch-target { display: block; }
+
+    /* Carousel Panel */
+    .ui-panel { position: absolute; bottom: 0; left: 0; width: 100%; height: 200px; background: rgba(20, 20, 20, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; padding-bottom: 10px; border-top: 2px solid #d4af37; }
+    .carousel-container { display: flex; align-items: center; width: 95%; margin-bottom: 10px; }
+    
+    .carousel { 
+      display: flex; gap: 20px; overflow-x: auto; scroll-behavior: smooth; 
+      padding: 10px; flex-grow: 1; scrollbar-width: none; justify-content: center; 
+    }
+    
+    .carousel::-webkit-scrollbar { display: none; }
+    .thumb { width: 100px; height: 100px; border-radius: 10px; border: 4px solid #fff; object-fit: cover; cursor: pointer; background: white; transition: 0.2s; }
+    .thumb.selected-left { border-color: #ffea00; transform: scale(1.1); }
+    .thumb.selected-right { border-color: #ff9100; transform: scale(1.1); }
+    .thumb.selected-single { border-color: #00ff00; transform: scale(1.1); }
+    .nav-btn { background: #444; color: #d4af37; border: 2px solid #d4af37; font-size: 24px; padding: 20px 15px; border-radius: 10px; cursor: pointer; margin: 0 5px; font-weight: bold; }
+    
+    .action-buttons { display: flex; gap: 30px; }
+    .btn { padding: 14px 40px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; border: 3px solid #d4af37; color: #333; text-transform: uppercase; letter-spacing: 1px; }
+    .btn-snapshot { background: linear-gradient(45deg, #d4af37, #b8860b); }
+    .btn-compare { background: #646464; color: white; border-color: #999; }
+    .btn-compare.active { background: #00c800; color: white; border-color: #00ff00; }
+
+    /* Popups */
+    #modal_overlay, #choice_modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+    .modal-box { background: #222; padding: 40px; border-radius: 15px; text-align: center; color: white; min-width: 400px; max-width: 80%; border: 2px solid #d4af37; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+    #qrcode { margin: 20px auto; background: white; padding: 15px; border-radius: 10px; display: inline-block; }
+    .btn-close { background: #ff3d00; color: white; border: none; padding: 15px 40px; font-size: 20px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 20px; width: 100%; }
+    .btn-choice { background: linear-gradient(45deg, #d4af37, #b8860b); color: #222; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin: 8px 0; width: 100%; text-transform: uppercase; }
+    .error-text { color: #ff5252; font-size: 18px; margin-top: 10px; text-align: left; }
+  </style>
+</head>
+<body>
+
+<!-- Start Screen -->
+<div id="start_screen" class="rajasthani-screen active-screen">
+  <div class="rajasthani-panel">
+    <img src="royal.png" alt="Brand Logo" style="width: 120px; margin-bottom: 15px; border-radius: 10px;">
+    <h1 class="rajasthani-title">Royal Mirror</h1>
+    <button class="raj-btn" onclick="startApp('portrait')">Start (Portrait)</button>
+    <button class="raj-btn" onclick="startApp('landscape')">Start (Landscape)</button>
+    <button class="raj-btn" onclick="switchScreen('settings_screen')">Settings</button>
+    <button class="raj-btn" onclick="exitApp()">Exit</button>
+  </div>
+</div>
+
+<!-- Settings Screen -->
+<div id="settings_screen" class="rajasthani-screen hidden-screen">
+  <div class="rajasthani-panel">
+    <h2 class="rajasthani-title">Settings</h2>
+    
+    <div class="settings-group">
+      <h3>Add New Jewelry</h3>
+      <input type="file" id="jewel_upload" accept="image/*" style="margin-bottom: 15px; color: white;">
+      <button class="raj-btn" onclick="processAndAddJewelry()">Upload & Remove Background</button>
+    </div>
+
+    <!-- CATEGORY 1: CHOKER SETTINGS -->
+    <div class="settings-group" style="background: rgba(0,0,0,0.5);">
+      <h3 style="color: #ffea00; margin-bottom: 5px;">1. Choker Settings</h3>
+      <div style="display:flex; justify-content: space-between; font-size:14px; color: #ccc;"><span>Scale</span><span id="c_scale_lbl">52%</span></div>
+      <input type="range" id="c_scale" min="10" max="250" value="52" style="width: 100%; cursor: pointer;" oninput="updateCat('choker', 'scale', this.value)">
+      <div style="display:flex; justify-content: space-between; font-size:14px; color: #ccc; margin-top:10px;"><span>Vertical Position</span><span id="c_pos_lbl">Down 15%</span></div>
+      <!-- EXPANDED SLIDER LIMITS HERE -->
+      <input type="range" id="c_pos" min="-300" max="300" value="15" style="width: 100%; cursor: pointer;" oninput="updateCat('choker', 'y', this.value)">
+    </div>
+
+    <!-- CATEGORY 2: PENDANT SETTINGS -->
+    <div class="settings-group" style="background: rgba(0,0,0,0.5);">
+      <h3 style="color: #ff9100; margin-bottom: 5px;">2. Pendant Settings</h3>
+      <div style="display:flex; justify-content: space-between; font-size:14px; color: #ccc;"><span>Scale</span><span id="p_scale_lbl">60%</span></div>
+      <input type="range" id="p_scale" min="10" max="250" value="60" style="width: 100%; cursor: pointer;" oninput="updateCat('pendant', 'scale', this.value)">
+      <div style="display:flex; justify-content: space-between; font-size:14px; color: #ccc; margin-top:10px;"><span>Vertical Position</span><span id="p_pos_lbl">Down 35%</span></div>
+      <!-- EXPANDED SLIDER LIMITS HERE -->
+      <input type="range" id="p_pos" min="-300" max="300" value="35" style="width: 100%; cursor: pointer;" oninput="updateCat('pendant', 'y', this.value)">
+    </div>
+    
+    <div class="settings-group">
+      <h3>Manage</h3>
+      <button class="raj-btn" onclick="openGallery()">Jewelry Images (Assign Categories)</button>
+    </div>
+    
+    <button class="raj-btn raj-btn-back" onclick="switchScreen('start_screen')">Back to Home</button>
+  </div>
+</div>
+
+<!-- Magic Wand Cleanup Modal -->
+<div id="eraser_modal" class="rajasthani-screen hidden-screen" style="z-index: 90;">
+  <div class="rajasthani-panel" style="width: 90%; max-width: 600px; padding: 30px;">
+    <h2 class="rajasthani-title" style="font-size: 28px; margin-bottom: 10px;">Smart Cleanup</h2>
+    
+    <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
+      <button id="btn_tool_wand" class="tool-btn active" onclick="setTool('wand')">🪄 Magic Wand</button>
+      <button id="btn_tool_erase" class="tool-btn inactive" onclick="setTool('erase')">🧽 Manual Eraser</button>
+    </div>
+    
+    <p id="tool_description" style="color: #ccc; margin-bottom: 15px; font-size: 14px;">Tap the background stand to auto-remove it.</p>
+    
+    <canvas id="eraser_canvas" class="checkered-bg" style="border: 2px dashed #d4af37; touch-action: none; max-width: 100%; cursor: crosshair;"></canvas>
+    
+    <div style="margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 15px;">
+      <label id="slider_label" style="color: white; font-weight: bold;">Tolerance: </label>
+      <input type="range" id="tool_slider" min="5" max="100" value="30">
+    </div>
+    
+    <div style="display: flex; gap: 15px; margin-top: 25px;">
+      <button class="raj-btn" onclick="saveErasedImage()">Finish & Save</button>
+      <button class="raj-btn raj-btn-back" onclick="cancelEraser()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gallery Manager Modal -->
+<div id="gallery_modal" class="rajasthani-screen hidden-screen" style="z-index: 70;">
+  <div class="rajasthani-panel" style="width: 80%; max-height: 85vh; overflow-y: auto;">
+    <h2 class="rajasthani-title" style="font-size: 32px; margin-bottom: 10px;">Your Jewelry</h2>
+    <p style="color: #ccc; margin-bottom: 25px;">Green border = Mirror Active. <b>Tap the bottom label to switch between Choker/Pendant.</b></p>
+    
+    <div id="gallery_grid"></div>
+    
+    <button class="raj-btn raj-btn-back" onclick="closeGallery()" style="max-width: 300px; margin: 0 auto;">Done</button>
+  </div>
+</div>
+
+<!-- Snapshot Choice Modal (for Compare Mode) -->
+<div id="choice_modal">
+  <div class="modal-box">
+    <h2 style="color: #d4af37; margin-bottom: 15px;">Choose Snapshot</h2>
+    <p style="color: #ccc; margin-bottom: 20px;">Which photo would you like to save?</p>
+    <button class="btn-choice" onclick="captureSelectedMode('left')">Left Necklace</button>
+    <button class="btn-choice" onclick="captureSelectedMode('right')">Right Necklace</button>
+    <button class="btn-choice" onclick="captureSelectedMode('both')">Both (Full Comparison)</button>
+    <button class="btn-close" onclick="closeChoiceModal()">CANCEL</button>
+  </div>
+</div>
+
+<!-- Main App Wrapper -->
+<div id="app_wrapper">
+  <div class="top-bar">
+    <select id="camera_selector" onchange="startCamera(this.value)"><option value="">Loading Cameras...</option></select>
+    <button class="btn-exit-app" onclick="switchScreen('start_screen')">Exit</button>
+  </div>
+
+  <video id="video_element" autoplay playsinline muted></video>
+  <canvas id="output_canvas"></canvas>
+
+  <div id="split_line"></div>
+  <div id="left_highlight" class="split-touch-target" onclick="setActiveSide('left')"></div>
+  <div id="right_highlight" class="split-touch-target" onclick="setActiveSide('right')"></div>
+
+  <div class="ui-panel">
+    <div class="carousel-container">
+      <button class="nav-btn" onclick="scrollCarousel(-1)">&#10094;&#10094;</button>
+      <div class="carousel" id="necklace_list"></div>
+      <button class="nav-btn" onclick="scrollCarousel(1)">&#10095;&#10095;</button>
+    </div>
+    <div class="action-buttons">
+      <button class="btn btn-compare" id="btn_compare" onclick="toggleCompare()">Compare</button>
+      <button class="btn btn-snapshot" onclick="handleSnapshotClick()">Snapshot</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Overlay for Saving -->
+<div id="modal_overlay">
+  <div class="modal-box">
+    <h2 id="modal_title">Saving...</h2>
+    <div id="modal_text" style="color: #ccc;"></div>
+    <div id="qrcode"></div>
+    <button class="btn-close" id="btn_close_modal" style="display:none;" onclick="closeModal()">CLOSE</button>
+  </div>
+</div>
+
+<script>
+// --- CORE VARIABLES & LOCAL STORAGE ---
+let necklaces = []; 
+let loadedImages = [];
+
+let jewelConfig = JSON.parse(localStorage.getItem('jewelConfig')) || { 
+  choker: { scale: 0.52, y: 0.15 }, 
+  pendant: { scale: 0.60, y: 0.35 } 
+};
+
+function updateCat(cat, prop, val) {
+  jewelConfig[cat][prop] = val / 100;
+  
+  let lbl = val + "%";
+  if(prop === 'y') {
+     lbl = val < 0 ? 'Up ' + Math.abs(val) + '%' : (val > 0 ? 'Down ' + val + '%' : 'Center');
+  }
+  
+  let idPrefix = cat === 'choker' ? 'c_' : 'p_';
+  let idSuffix = prop === 'scale' ? 'scale_lbl' : 'pos_lbl';
+  document.getElementById(idPrefix + idSuffix).innerText = lbl;
+  
+  localStorage.setItem('jewelConfig', JSON.stringify(jewelConfig));
+}
+
+function loadSavedJewelry() {
+  necklaces = [];
+  loadedImages = [];
+  const saved = localStorage.getItem('customJewelry');
+  
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    parsed.forEach(item => {
+      if (item.active !== false) {
+        if(!item.category) item.category = 'choker'; // Fallback
+        necklaces.push(item);
+      }
+    });
+  }
+  
+  loadedImages = necklaces.map(n => {
+    const img = new Image();
+    img.src = n.src;
+    return img;
+  });
+}
+loadSavedJewelry();
+
+let splitScreenMode = false;
+let activeSide = 'left';
+let leftNecklaceIndex = 0;
+let rightNecklaceIndex = 0;
+
+const appWrapper = document.getElementById('app_wrapper');
+const videoElement = document.getElementById('video_element');
+const canvasElement = document.getElementById('output_canvas');
+const canvasCtx = canvasElement.getContext('2d');
+const carouselElement = document.getElementById('necklace_list');
+const cameraSelector = document.getElementById('camera_selector');
+const splitLine = document.getElementById('split_line');
+
+let activeStream = null;
+let animationFrameId = null;
+let isAIBusy = false; 
+let lastKnownLandmarks = null; 
+
+// Initialize sliders to saved values on load
+window.onload = () => {
+  document.getElementById('c_scale').value = Math.round(jewelConfig.choker.scale * 100);
+  document.getElementById('c_scale_lbl').innerText = Math.round(jewelConfig.choker.scale * 100) + '%';
+  document.getElementById('c_pos').value = Math.round(jewelConfig.choker.y * 100);
+  document.getElementById('c_pos_lbl').innerText = (jewelConfig.choker.y * 100) < 0 ? 'Up ' + Math.abs(Math.round(jewelConfig.choker.y * 100)) + '%' : ((jewelConfig.choker.y * 100) > 0 ? 'Down ' + Math.round(jewelConfig.choker.y * 100) + '%' : 'Center');
+
+  document.getElementById('p_scale').value = Math.round(jewelConfig.pendant.scale * 100);
+  document.getElementById('p_scale_lbl').innerText = Math.round(jewelConfig.pendant.scale * 100) + '%';
+  document.getElementById('p_pos').value = Math.round(jewelConfig.pendant.y * 100);
+  document.getElementById('p_pos_lbl').innerText = (jewelConfig.pendant.y * 100) < 0 ? 'Up ' + Math.abs(Math.round(jewelConfig.pendant.y * 100)) + '%' : ((jewelConfig.pendant.y * 100) > 0 ? 'Down ' + Math.round(jewelConfig.pendant.y * 100) + '%' : 'Center');
+};
+
+// --- GALLERY MANAGER LOGIC ---
+function openGallery() {
+  const galleryGrid = document.getElementById('gallery_grid');
+  galleryGrid.innerHTML = '';
+  
+  let saved = JSON.parse(localStorage.getItem('customJewelry') || '[]');
+
+  if (saved.length === 0) {
+    galleryGrid.innerHTML = '<p style="color:white; font-size: 18px;">No jewelry saved yet. Upload an image above!</p>';
+  }
+
+  saved.forEach(item => {
+    if (item.active === undefined) item.active = true;
+    if (!item.category) item.category = 'choker';
+
+    const div = document.createElement('div');
+    div.className = `gallery-item ${item.active ? 'active-item' : ''}`;
+    
+    const img = document.createElement('img');
+    img.src = item.src;
+    img.className = 'checkered-bg';
+    img.onclick = () => toggleJewelryActive(item.id);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-delete-item';
+    delBtn.innerHTML = 'X';
+    delBtn.onclick = (e) => { 
+      e.stopPropagation(); 
+      deleteJewelry(item.id); 
+    };
+    
+    // NEW: Clickable Category Toggle Badge
+    const badge = document.createElement('div');
+    badge.className = 'cat-badge';
+    badge.innerHTML = (item.category === 'pendant' ? 'Pendant' : 'Choker') + ' &#10227;'; // Rotate Icon
+    
+    // Assign category swap on click
+    badge.onclick = (e) => {
+      e.stopPropagation();
+      toggleItemCategory(item.id);
+    };
+
+    div.appendChild(img);
+    div.appendChild(delBtn);
+    div.appendChild(badge);
+    galleryGrid.appendChild(div);
+  });
+  
+  document.getElementById('gallery_modal').classList.replace('hidden-screen', 'active-screen');
+}
+
+function closeGallery() {
+  document.getElementById('gallery_modal').classList.replace('active-screen', 'hidden-screen');
+  loadSavedJewelry(); 
+}
+
+function toggleJewelryActive(id) {
+  let saved = JSON.parse(localStorage.getItem('customJewelry') || '[]');
+  let item = saved.find(j => j.id === id);
+  if (item) {
+     item.active = item.active === undefined ? false : !item.active;
+     localStorage.setItem('customJewelry', JSON.stringify(saved));
+     openGallery(); 
+  }
+}
+
+// NEW: Instantly swaps the category between Choker/Pendant when the badge is clicked
+function toggleItemCategory(id) {
+  let saved = JSON.parse(localStorage.getItem('customJewelry') || '[]');
+  let item = saved.find(j => j.id === id);
+  if (item) {
+     item.category = item.category === 'pendant' ? 'choker' : 'pendant';
+     localStorage.setItem('customJewelry', JSON.stringify(saved));
+     loadSavedJewelry(); // Update memory arrays so live camera reads the new category
+     openGallery(); // Refresh UI
+  }
+}
+
+function deleteJewelry(id) {
+  if (confirm("Permanently delete this jewelry?")) {
+    let saved = JSON.parse(localStorage.getItem('customJewelry') || '[]');
+    saved = saved.filter(j => j.id !== id);
+    localStorage.setItem('customJewelry', JSON.stringify(saved));
+    openGallery(); 
+  }
+}
+
+// --- MAGIC WAND & ERASER TOOL LOGIC ---
+let eraserCtx, eraserCanvas, isDrawing = false, tempEraserImage = new Image();
+let activeTool = 'wand'; 
+
+function setTool(toolName) {
+  activeTool = toolName;
+  document.getElementById('btn_tool_wand').className = toolName === 'wand' ? 'tool-btn active' : 'tool-btn inactive';
+  document.getElementById('btn_tool_erase').className = toolName === 'erase' ? 'tool-btn active' : 'tool-btn inactive';
+  document.getElementById('tool_description').innerText = toolName === 'wand' 
+    ? "Tap the background stand to auto-remove it." 
+    : "Drag your finger to manually erase leftover parts.";
+  document.getElementById('slider_label').innerText = toolName === 'wand' ? "Tolerance: " : "Brush Size: ";
+}
+
+function openEraserTool(base64data) {
+  document.getElementById('eraser_modal').classList.replace('hidden-screen', 'active-screen');
+  setTool('wand'); 
+  
+  eraserCanvas = document.getElementById('eraser_canvas');
+  eraserCtx = eraserCanvas.getContext('2d', { willReadFrequently: true });
+  
+  tempEraserImage.onload = () => {
+    const MAX_WIDTH = 500;
+    let scale = 1;
+    if (tempEraserImage.width > MAX_WIDTH) { scale = MAX_WIDTH / tempEraserImage.width; }
+    
+    eraserCanvas.width = tempEraserImage.width * scale;
+    eraserCanvas.height = tempEraserImage.height * scale;
+    eraserCtx.drawImage(tempEraserImage, 0, 0, eraserCanvas.width, eraserCanvas.height);
+  };
+  tempEraserImage.src = base64data;
+  
+  eraserCanvas.onmousedown = handleInputStart;
+  eraserCanvas.onmousemove = handleInputMove;
+  window.onmouseup = () => { isDrawing = false; };
+  
+  eraserCanvas.ontouchstart = (e) => { e.preventDefault(); handleInputStart(e.touches[0]); };
+  eraserCanvas.ontouchmove = (e) => { e.preventDefault(); handleInputMove(e.touches[0]); };
+  window.ontouchend = () => { isDrawing = false; };
+}
+
+function handleInputStart(e) {
+  isDrawing = true;
+  if (activeTool === 'wand') {
+    executeMagicWand(e);
+    isDrawing = false; 
+  } else {
+    executeManualErase(e);
+  }
+}
+
+function handleInputMove(e) {
+  if (!isDrawing || activeTool !== 'erase') return;
+  executeManualErase(e);
+}
+
+function getCanvasCoordinates(e) {
+  const rect = eraserCanvas.getBoundingClientRect();
+  const scaleX = eraserCanvas.width / rect.width;
+  const scaleY = eraserCanvas.height / rect.height;
+  return {
+    x: Math.floor((e.clientX - rect.left) * scaleX),
+    y: Math.floor((e.clientY - rect.top) * scaleY)
+  };
+}
+
+function executeMagicWand(e) {
+  const coords = getCanvasCoordinates(e);
+  const w = eraserCanvas.width;
+  const h = eraserCanvas.height;
+  const imgData = eraserCtx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  
+  const startPos = (coords.y * w + coords.x) * 4;
+  const targetR = data[startPos];
+  const targetG = data[startPos + 1];
+  const targetB = data[startPos + 2];
+  const targetA = data[startPos + 3];
+
+  if (targetA === 0) return; 
+
+  const tolerance = parseInt(document.getElementById('tool_slider').value) * 1.5; 
+  
+  const pixelsToCheck = [coords.x, coords.y];
+  const visited = new Uint8Array(w * h);
+  
+  while (pixelsToCheck.length > 0) {
+    const y = pixelsToCheck.pop();
+    const x = pixelsToCheck.pop();
+    const pos = y * w + x;
+    
+    if (visited[pos]) continue;
+    visited[pos] = 1;
+    
+    const dataPos = pos * 4;
+    const rDiff = data[dataPos] - targetR;
+    const gDiff = data[dataPos + 1] - targetG;
+    const bDiff = data[dataPos + 2] - targetB;
+    
+    const distance = Math.sqrt(rDiff*rDiff + gDiff*gDiff + bDiff*bDiff);
+    
+    if (distance <= tolerance && data[dataPos + 3] > 0) {
+      data[dataPos + 3] = 0; 
+      
+      if (x > 0) { pixelsToCheck.push(x - 1, y); }
+      if (x < w - 1) { pixelsToCheck.push(x + 1, y); }
+      if (y > 0) { pixelsToCheck.push(x, y - 1); }
+      if (y < h - 1) { pixelsToCheck.push(x, y + 1); }
+    }
+  }
+  
+  eraserCtx.putImageData(imgData, 0, 0);
+}
+
+function executeManualErase(e) {
+  const coords = getCanvasCoordinates(e);
+  const brushSize = document.getElementById('tool_slider').value;
+  
+  eraserCtx.globalCompositeOperation = 'destination-out';
+  eraserCtx.beginPath();
+  eraserCtx.arc(coords.x, coords.y, brushSize, 0, Math.PI * 2, false);
+  eraserCtx.fill();
+  eraserCtx.globalCompositeOperation = 'source-over';
+}
+
+function saveErasedImage() {
+  const finalBase64 = eraserCanvas.toDataURL('image/png');
+  // Default to Choker, users can click in gallery to change to pendant
+  const newItem = { id: Date.now(), src: finalBase64, active: true, category: 'choker' };
+  
+  let saved = localStorage.getItem('customJewelry');
+  let savedArray = saved ? JSON.parse(saved) : [];
+  savedArray.push(newItem);
+  localStorage.setItem('customJewelry', JSON.stringify(savedArray));
+
+  loadSavedJewelry();
+
+  document.getElementById('eraser_modal').classList.replace('active-screen', 'hidden-screen');
+  document.getElementById('jewel_upload').value = "";
+  alert("Jewelry saved perfectly! You can manage it in 'Jewelry Images' or start the mirror.");
+}
+
+function cancelEraser() {
+  document.getElementById('eraser_modal').classList.replace('active-screen', 'hidden-screen');
+  document.getElementById('jewel_upload').value = "";
+}
+
+// --- SCREEN MANAGEMENT & CAMERA ---
+function startApp(mode) {
+  if (!necklaces || necklaces.length === 0) {
+    alert("You have no selected jewelry! Please go to Settings > Manage to select or upload jewelry.");
+    switchScreen('settings_screen');
+    return;
+  }
+  appWrapper.classList.remove('mode-portrait', 'mode-landscape');
+  appWrapper.classList.add(`mode-${mode}`);
+  leftNecklaceIndex = 0;
+  rightNecklaceIndex = necklaces.length > 1 ? 1 : 0;
+  buildCarousel();
+  switchScreen('app_wrapper');
+}
+
+function switchScreen(screenId) {
+  document.getElementById('start_screen').classList.replace('active-screen', 'hidden-screen');
+  document.getElementById('settings_screen').classList.replace('active-screen', 'hidden-screen');
+  appWrapper.style.display = 'none';
+  if (screenId === 'app_wrapper') {
+    appWrapper.style.display = 'block';
+    getAvailableCameras(); 
+  } else {
+    document.getElementById(screenId).classList.replace('hidden-screen', 'active-screen');
+  }
+}
+
+function exitApp() { if (confirm("Are you sure you want to exit?")) window.close(); }
+
+// --- MEDIAPIPE AI SETUP ---
+const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
+pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+pose.onResults((results) => { lastKnownLandmarks = results.poseLandmarks; });
+
+async function getAvailableCameras() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+    cameraSelector.innerHTML = ''; 
+    videoDevices.forEach((device, index) => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.text = device.label || `Camera ${index + 1}`; 
+      cameraSelector.appendChild(option);
+    });
+    if (videoDevices.length > 0) startCamera(videoDevices[0].deviceId);
+  } catch (err) { console.error("Camera access failed", err); }
+}
+
+async function startCamera(deviceId) {
+  if (activeStream) activeStream.getTracks().forEach(track => track.stop());
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+  let constraints = { video: { width: { ideal: 1920 }, height: { ideal: 1080 } } };
+  if (deviceId) constraints.video.deviceId = { exact: deviceId };
+
+  try {
+    activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+    videoElement.srcObject = activeStream;
+    await videoElement.play(); 
+
+    function renderLoop() {
+      canvasElement.width = appWrapper.clientWidth;
+      canvasElement.height = appWrapper.clientHeight;
+      const cw = canvasElement.width, ch = canvasElement.height;
+
+      if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+        canvasCtx.save();
+        canvasCtx.translate(cw, 0); canvasCtx.scale(-1, 1);
+        
+        const leftItem = necklaces[leftNecklaceIndex] || {category: 'choker'};
+        const rightItem = necklaces[rightNecklaceIndex] || {category: 'choker'};
+        const confLeft = jewelConfig[leftItem.category || 'choker'];
+        const confRight = jewelConfig[rightItem.category || 'choker'];
+
+        if (splitScreenMode) {
+          drawVideoAndNecklace(videoElement, loadedImages[leftNecklaceIndex], cw/2, cw/2, ch, lastKnownLandmarks, confLeft);
+          drawVideoAndNecklace(videoElement, loadedImages[rightNecklaceIndex], 0, cw/2, ch, lastKnownLandmarks, confRight);
+        } else {
+          drawVideoAndNecklace(videoElement, loadedImages[leftNecklaceIndex], 0, cw, ch, lastKnownLandmarks, confLeft);
+        }
+        canvasCtx.restore();
+
+        if (!isAIBusy) {
+          isAIBusy = true;
+          pose.send({ image: videoElement }).then(() => isAIBusy = false).catch(() => isAIBusy = false);
+        }
+      }
+      animationFrameId = requestAnimationFrame(renderLoop);
+    }
+    renderLoop();
+  } catch (err) { console.error(err); }
+}
+
+function drawVideoAndNecklace(img, necklaceImg, xOffset, targetWidth, targetHeight, landmarks, config) {
+  const srcW = img.videoWidth, srcH = img.videoHeight;
+  const destRatio = targetWidth / targetHeight, srcRatio = srcW / srcH;
+  let sX = 0, sY = 0, sW = srcW, sH = srcH;
+
+  if (srcRatio > destRatio) { sW = srcH * destRatio; sX = (srcW - sW) / 2; } 
+  else { sH = srcW / destRatio; sY = (srcH - sH) / 2; }
+
+  canvasCtx.save();
+  canvasCtx.beginPath();
+  canvasCtx.rect(xOffset, 0, targetWidth, targetHeight);
+  canvasCtx.clip();
+
+  canvasCtx.drawImage(img, sX, sY, sW, sH, xOffset, 0, targetWidth, targetHeight);
+
+  if (landmarks && necklaceImg && necklaceImg.complete) {
+    const l = landmarks[11], r = landmarks[12]; 
+    if (l && r && l.visibility > 0.6 && r.visibility > 0.6) {
+      const normLX = (l.x * srcW - sX) / sW, normLY = (l.y * srcH - sY) / sH;
+      const normRX = (r.x * srcW - sX) / sW, normRY = (r.y * srcH - sY) / sH;
+
+      const pL = { x: xOffset + normLX * targetWidth, y: normLY * targetHeight };
+      const pR = { x: xOffset + normRX * targetWidth, y: normRY * targetHeight };
+
+      const shoulderWidth = Math.hypot(pL.x - pR.x, pL.y - pR.y);
+      const cx = (pL.x + pR.x) / 2;
+      
+      const cy = ((pL.y + pR.y) / 2) + (shoulderWidth * config.y);
+      const scaleW = shoulderWidth * config.scale; 
+      
+      const height = scaleW * (necklaceImg.naturalHeight / necklaceImg.naturalWidth || 1);
+      
+      canvasCtx.filter = 'brightness(1.15) contrast(1.1) drop-shadow(0px 5px 5px rgba(0,0,0,0.5))';
+      canvasCtx.drawImage(necklaceImg, cx - scaleW/2, cy - height/2, scaleW, height);
+      canvasCtx.filter = 'none';
+    }
+  }
+  
+  canvasCtx.restore();
+}
+
+// --- UI LOGIC ---
+function buildCarousel() {
+  carouselElement.innerHTML = '';
+  if (!necklaces || necklaces.length === 0) return;
+  necklaces.forEach((item, index) => {
+    const img = document.createElement('img');
+    img.src = item.src; img.className = 'thumb';
+    if (splitScreenMode) {
+      if (index === leftNecklaceIndex) img.classList.add('selected-left');
+      if (index === rightNecklaceIndex) img.classList.add('selected-right');
+    } else {
+      if (index === leftNecklaceIndex) img.classList.add('selected-single');
+    }
+    img.onclick = () => selectNecklace(index);
+    carouselElement.appendChild(img);
+  });
+}
+
+function selectNecklace(index) {
+  if (splitScreenMode) { activeSide === 'left' ? leftNecklaceIndex = index : rightNecklaceIndex = index; } 
+  else { leftNecklaceIndex = index; }
+  buildCarousel();
+}
+
+function toggleCompare() {
+  splitScreenMode = !splitScreenMode;
+  document.getElementById('btn_compare').classList.toggle('active');
+  splitLine.style.display = splitScreenMode ? 'block' : 'none';
+  if (splitScreenMode) { appWrapper.classList.add('compare-active'); setActiveSide('left'); } 
+  else { appWrapper.classList.remove('compare-active', 'active-left', 'active-right'); }
+  buildCarousel();
+}
+
+function setActiveSide(side) {
+  if (!splitScreenMode) return;
+  activeSide = side;
+  appWrapper.classList.remove('active-left', 'active-right');
+  appWrapper.classList.add(`active-${side}`);
+  buildCarousel();
+}
+
+function scrollCarousel(direction) { carouselElement.scrollBy({ left: direction * 250, behavior: 'smooth' }); }
+
+// --- SNAPSHOT UPLOAD (CLOUDINARY) ---
+function handleSnapshotClick() {
+  if (splitScreenMode) {
+    document.getElementById('choice_modal').style.display = 'flex';
+  } else {
+    executeSnapshot('single');
+  }
+}
+
+function closeChoiceModal() {
+  document.getElementById('choice_modal').style.display = 'none';
+}
+
+function captureSelectedMode(mode) {
+  closeChoiceModal();
+  executeSnapshot(mode);
+}
+
+async function executeSnapshot(captureMode) {
+  showModal("Saving Image...", "Please wait while we generate your QR code.", false);
+  document.getElementById('modal_text').innerHTML = "Uploading to Cloudinary...";
+  
+  let targetCanvas = canvasElement;
+  
+  if (captureMode === 'left') {
+    targetCanvas = document.createElement('canvas');
+    targetCanvas.width = canvasElement.width / 2;
+    targetCanvas.height = canvasElement.height;
+    const tCtx = targetCanvas.getContext('2d');
+    tCtx.drawImage(canvasElement, 0, 0, canvasElement.width / 2, canvasElement.height, 0, 0, targetCanvas.width, targetCanvas.height);
+  } else if (captureMode === 'right') {
+    targetCanvas = document.createElement('canvas');
+    targetCanvas.width = canvasElement.width / 2;
+    targetCanvas.height = canvasElement.height;
+    const tCtx = targetCanvas.getContext('2d');
+    tCtx.drawImage(canvasElement, canvasElement.width / 2, 0, canvasElement.width / 2, canvasElement.height, 0, 0, targetCanvas.width, targetCanvas.height);
+  }
+
+  const dataURL = targetCanvas.toDataURL('image/jpeg', 0.9);
+  const CLOUD_NAME = "hwikf5zd"; 
+  const UPLOAD_PRESET = "Jewelstandy"; 
+  const formData = new FormData();
+  formData.append("file", dataURL);
+  formData.append("upload_preset", UPLOAD_PRESET);
+  
+  try {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+      method: 'POST', body: formData
+    });
+    const json = await res.json();
+    if (json.secure_url) {
+      showModal("Scan to get your photo!", "", true);
+      document.getElementById('modal_text').innerHTML = "";
+      document.getElementById('qrcode').innerHTML = "";
+      new QRCode(document.getElementById("qrcode"), { 
+        text: json.secure_url, width: 250, height: 250, colorDark: "#000", colorLight: "#fff" 
+      });
+    } else { throw new Error(json.error?.message || "Cloudinary upload failed"); }
+  } catch (err) { showModal("Upload Failed", `<p class="error-text">Check internet or Cloudinary configuration.</p>`, true); }
+}
+
+// --- JEWELRY UPLOAD & BG REMOVAL ---
+async function processAndAddJewelry() {
+  const fileInput = document.getElementById('jewel_upload');
+  if (!fileInput.files.length) return alert("Please select an image first!");
+
+  const REMOVE_BG_API_KEY = "DdcSLnBXN7oioKD14srh5K6E";
+  showModal("Processing Image", "Removing background, please wait...", false);
+  
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append('image_file', file);
+  formData.append('size', 'auto');
+  formData.append('type', 'auto'); 
+  formData.append('crop', 'true');    
+
+  try {
+    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST', headers: { 'X-Api-Key': REMOVE_BG_API_KEY }, body: formData
+    });
+
+    if (!response.ok) throw new Error("Remove.bg failed. Check API Key.");
+
+    const blob = await response.blob();
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onloadend = function() {
+      closeModal();
+      openEraserTool(reader.result);
+    }
+  } catch (err) {
+    closeModal();
+    alert("Error: " + err.message);
+  }
+}
+
+// --- MODAL LOGIC ---
+const overlay = document.getElementById('modal_overlay');
+function showModal(title, text, showCloseBtn) {
+  document.getElementById('modal_title').innerText = title;
+  document.getElementById('modal_text').innerHTML = text;
+  document.getElementById('qrcode').innerHTML = "";
+  document.getElementById('btn_close_modal').style.display = showCloseBtn ? 'inline-block' : 'none';
+  overlay.style.display = 'flex';
+}
+function closeModal() { overlay.style.display = 'none'; }
+</script>
+</body>
+</html>
